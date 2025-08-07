@@ -1,44 +1,74 @@
-// server.js
-const express = require('express')
+const express = require('express');
 const cors = require('cors');
+const { Resend } = require('resend');
+require('dotenv').config(); // to read from .env
+import { Resend } from 'resend';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware (optional)
-app.use(cors()); // allow connections from mobile app
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-// Data
+// Email client
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Data store (in-memory)
 let submittedData = [];
-console.log('submitted', submittedData)
+
 // Routes
 app.get('/', (req, res) => {
   res.send('Hello from Express!');
 });
 
-// GET endpoint to view submitted data
 app.get('/submitted-clients', (req, res) => {
-  
   res.json(submittedData);
 });
 
-app.post('/client-info', (req, res) => {
+app.post('/client-info', async (req, res) => {
   const { name, email, isPastAudience, event } = req.body;
 
-  const entry = { name, email, event, isPastAudience, timestamp: new Date().toISOString() };
-  submittedData.push(entry);
-console.log('entry', entry)
-console.log('afterEntry', submittedData);
-  if (!name || !email || !isPastAudience || !event) {
-    return res.status(400).json({ error: 'Name, email, and isPastAudience are required.' });
+  if (!name || !email || isPastAudience === undefined || !event) {
+    return res.status(400).json({
+      error: 'Name, email, isPastAudience, and event are required.',
+    });
   }
 
-  console.log(`Received from client: Name=${name}, Email=${email}, isPastAudience=${isPastAudience}, event=${event}`);
+  const entry = {
+    name,
+    email,
+    event,
+    isPastAudience,
+    timestamp: new Date().toISOString(),
+  };
 
-  res.json({ response: `Hello, ${name}. Your email is "${email} and you have / have not seen a past Opera Atelier show, ${isPastAudience}"` });
+  submittedData.push(entry);
+  console.log('New entry:', entry);
+
+  const responseMessage = `Hello, ${name}. Your email is "${email}" and you ${
+    isPastAudience ? 'have' : 'have not'
+  } seen a past Opera Atelier show.`;
+
+  // Send email using Resend
+  try {
+    const resend = new Resend('••••••••••••••••••••••••••••••••••••');
+
+    resend.emails.send({
+      from: process.env.FROM_EMAIL, // e.g., ...@operaatelier.com
+      to: email,
+      subject: 'Hello World',
+      html: `<p>${responseMessage}</p><p>Event: ${event}</p>`
+    });
+
+    console.log('Email sent:', emailResponse);
+  } catch (error) {
+    console.error('Email failed:', error);
+  }
+
+  res.json({ response: responseMessage });
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
